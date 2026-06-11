@@ -124,6 +124,11 @@ Then invoke it from a Claude Code session and iterate.
 
 ## When Helping Users in This Repo
 
+- **This repo is PUBLIC.** Keep every skill generic and portfolio-agnostic — no
+  internal app/repo names, private paths, branch names, infra details, or
+  security/roadmap specifics. Push that context to private memory or a private
+  repo and reference it only abstractly. (Note: a leaked commit can persist in a
+  merged PR's `refs/pull/N/head` even after a history rewrite — get it right before merging.)
 - If the user asks you to create a new skill, scaffold the directory under
   `skills/{skill-name}/` with a `SKILL.md` matching the format above.
 - Do not invent fake examples in `README.md` — only list skills that actually
