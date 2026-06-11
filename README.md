@@ -7,8 +7,9 @@ Skills follow the [Agent Skills](https://agentskills.io/) format.
 
 ## Available Skills
 
-_None yet — this repo is the starting point. New skills will be added under
-[`skills/`](./skills) as we build them._
+- [`apply-design-system-update`](./skills/apply-design-system-update) — propagate a
+  Rising design-system token change (color, size, spacing, font) to the consumer
+  apps that copy tokens inline.
 
 ## Skill Structure
 
