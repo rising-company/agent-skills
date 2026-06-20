@@ -181,17 +181,60 @@ npx vercel --prod --yes
 
 - **Yes**: schema, functions, `auth.ts`/`auth.config.ts`/`http.ts` live in
   `convex/` and are committed — that's the backend, fully reproducible.
-- **No (by design / needs wiring)**: deployment env vars (SMTP, JWT keys,
-  `SITE_URL`, feature flags) are set via `npx convex env set` on the
-  deployment, not in the repo. For reproducible deploys + **preview/PR
-  environments**, codify the build integration:
-  - `vercel.json` → `"buildCommand": "npx convex deploy --cmd 'npm run build'"`.
-  - `CONVEX_DEPLOY_KEY` in Vercel: a **production** deploy key
-    (`npx convex deployment token create <name> --prod --save-env`) for the
-    Production scope, and a **preview** deploy key for the Preview scope.
-    Preview keys are **dashboard-only** (the CLI mints prod/specific-deployment
-    keys, not preview ones). With this in place, each Vercel preview build spins
-    up a Convex preview deployment and auto-sets `NEXT_PUBLIC_CONVEX_URL`.
+- **No (by design)**: deployment env vars (SMTP, JWT keys, `SITE_URL`, feature
+  flags) are set via `npx convex env set` on the deployment, and deploy keys
+  live in Vercel — not in the repo. Codify the *build integration* (below);
+  keep the secrets out.
+
+## Preview / PR environments (Vercel + Convex) — verified end to end
+
+Default Vercel previews are NOT functional for a Convex app (no
+`NEXT_PUBLIC_CONVEX_URL`, no backend). To give every PR its own isolated Convex
+backend:
+
+1. **Integrated build** — commit `vercel.json`:
+   ```json
+   { "buildCommand": "npx convex deploy --cmd 'npm run build'" }
+   ```
+   Each Vercel build then deploys the matching Convex backend and auto-injects
+   `NEXT_PUBLIC_CONVEX_URL` / `NEXT_PUBLIC_CONVEX_SITE_URL` into `npm run build`.
+2. **Deploy keys** (`CONVEX_DEPLOY_KEY` in Vercel):
+   - **Production scope** — a prod key:
+     `npx convex deployment token create ci --prod --save-env <file>` (writes to
+     a file instead of printing).
+   - **Preview scope** — a **preview** key (prefix `preview:`). The **CLI cannot
+     mint preview keys — generate it in the Convex dashboard** (Settings →
+     Deploy Keys). Without it, preview builds fail fast with
+     `✖ Vercel build environment detected but no Convex deployment configuration found`.
+   - Vercel CLI gotcha: `vercel env add NAME preview --value '<v>' --yes`
+     (older Vercel CLI, e.g. 52.x, ignores these flags — upgrade to latest).
+3. **Verify** by reading the preview build log — a working run prints:
+   `▌ [Preview] team:project:preview/<branch> └─ https://<name>.convex.cloud`
+   and `✔ Deployed Convex functions to https://<name>.convex.cloud`.
+
+### Preview deployments start EMPTY — auth crashes until you provision env
+
+The deploy key gets you a preview *deployment*, but it has **no env vars and no
+data**. Magic-link sign-in 500s with
+`Missing environment variable SITE_URL` (in `redirectAbsoluteUrl` /
+`handleEmailAndPhoneProvider`) until the preview deployment has auth config.
+Provision a specific preview deployment by name (from the build log):
+```bash
+npx @convex-dev/auth --deployment-name <name> --web-server-url <preview-url>   # JWT keys + SITE_URL
+npx convex env set --deployment <name> SMTP_HOST … SMTP_PASS …                  # email
+```
+- **Durable fix for all previews:** set **Preview default environment
+  variables** in the Convex dashboard for the *static* values (`JWT_PRIVATE_KEY`,
+  `JWKS`, `SMTP_*`) so every new preview inherits them.
+- **`SITE_URL` is the awkward one** — it's per-preview (each Vercel preview has a
+  different URL). Either set it per-branch (precise, manual), default it to a
+  fixed URL (sign-in works but redirects land there, not the preview), or
+  automate it from `VERCEL_BRANCH_URL` at build / via a `--preview-run` setup
+  function for zero-touch preview auth.
+- The **test-auth Password bypass** only renders on a preview if
+  `NEXT_PUBLIC_ENABLE_TEST_AUTH` is set in the Vercel **Preview** scope at build
+  time (it's a build-time `NEXT_PUBLIC_*` flag). Handy for exercising previews
+  without email — but never set it (or `ENABLE_TEST_AUTH`) in Production.
 
 ## References in a real implementation
 
