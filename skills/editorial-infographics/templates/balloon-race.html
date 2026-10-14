@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Balloon Race</title>
+<style>
+  :root {
+    --bg: #fafaf7; --ink: #1d1d1b; --muted: #6b6b66; --line: #e3e2dc; --band: #f0efe9; --worth: #c9452e;
+    --c1: #4e8fb3; --c2: #d98c2b; --c3: #8aa05a; --c4: #b56b8f; --c5: #7a6fb5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161614; --ink: #f1f0ea; --muted: #a3a29b; --line: #34332f; --band: #1f1f1c; --worth: #ef6a50;
+      --c1: #5fa3c8; --c2: #e39a3c; --c3: #9cb36a; --c4: #c77fa2; --c5: #9389cf;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: clamp(28px, 6vw, 48px); line-height: 1.05; margin: 0 0 6px; letter-spacing: -.02em; }
+  .sub { font-size: 18px; color: var(--muted); margin: 0 0 14px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+  .controls button { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line); background: transparent; color: var(--ink); }
+  .controls button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .key { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+  .band { fill: var(--band); }
+  .grade { fill: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  .worth { stroke: var(--worth); stroke-dasharray: 5 4; }
+  .worth-lbl { fill: var(--worth); font-size: 12px; font-weight: 600; }
+  circle.b { stroke: var(--bg); stroke-width: 1.5; fill-opacity: .9; cursor: default; }
+  circle.b.dim { fill-opacity: .12; }
+  text.bl { fill: var(--ink); font-size: 11px; text-anchor: middle; pointer-events: none; paint-order: stroke;
+    stroke: var(--bg); stroke-width: 3px; }
+  .tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); padding: 6px 9px;
+    border-radius: 4px; font-size: 13px; max-width: 280px; opacity: 0; }
+  footer { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1 id="headline"></h1>
+  <p class="sub" id="subhead"></p>
+  <div class="controls" id="controls"></div>
+  <p class="key" id="key"></p>
+  <div id="chart" role="img"></div>
+  <footer id="footer"></footer>
+</main>
+<div class="tip" id="tip"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+// ===== COPY =====
+const COPY = {
+  headline: "Sample Snake Oil?",
+  subhead: "Placeholder data — the higher a bubble floats, the stronger the evidence for that claim.",
+  sizeMeans: "how popular it is (e.g. search volume)",
+  sources: "SAMPLE DATA, not real evidence grades",
+  dataUrl: "data.csv",
+  method: "#method",
+  credits: "Design: you",
+  updated: "Jan 2026",
+};
+// Evidence ladder (see references/editorial.md); WORTH_IT draws the line above this grade
+const GRADES = ["None", "Slight", "Conflicting", "Promising", "Good", "Strong"];
+const WORTH_IT = 4; // line sits between Promising (4) and Good (5)
+const CATEGORIES = { heart: ["Heart", "--c1"], mind: ["Mind & mood", "--c4"], gut: ["Gut", "--c2"],
+                     immune: ["Immunity", "--c3"], general: ["General", "--c5"] };
+// ===== DATA: one row per CLAIM (item × outcome) =====
+const DATA = [
+  { item: "Item A", outcome: "blood pressure", grade: 6, popularity: 70, cat: "heart" },
+  { item: "Item A", outcome: "colds",          grade: 2, popularity: 70, cat: "immune" },
+  { item: "Item B", outcome: "sleep",          grade: 5, popularity: 55, cat: "mind" },
+  { item: "Item C", outcome: "anxiety",        grade: 3, popularity: 40, cat: "mind" },
+  { item: "Item D", outcome: "digestion",      grade: 4, popularity: 35, cat: "gut" },
+  { item: "Item E", outcome: "energy",         grade: 1, popularity: 95, cat: "general" },
+  { item: "Item F", outcome: "immunity",       grade: 1, popularity: 80, cat: "immune" },
+  { item: "Item G", outcome: "cholesterol",    grade: 5, popularity: 25, cat: "heart" },
+  { item: "Item H", outcome: "memory",         grade: 2, popularity: 60, cat: "mind" },
+  { item: "Item I", outcome: "IBS",            grade: 4, popularity: 20, cat: "gut" },
+  { item: "Item J", outcome: "longevity",      grade: 1, popularity: 50, cat: "general" },
+  { item: "Item K", outcome: "depression",     grade: 4, popularity: 45, cat: "mind" },
+  { item: "Item L", outcome: "heart disease",  grade: 3, popularity: 30, cat: "heart" },
+  { item: "Item M", outcome: "flu",            grade: 3, popularity: 65, cat: "immune" },
+  { item: "Item N", outcome: "bloating",       grade: 2, popularity: 15, cat: "gut" },
+];
+// ===== end of things to edit =====
+
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const tip = d3.select("#tip");
+let active = null;
+
+d3.select("#headline").text(COPY.headline);
+d3.select("#subhead").text(COPY.subhead);
+d3.select("#key").text(`Height = strength of scientific evidence · Bubble size = ${COPY.sizeMeans} · One bubble per claim`);
+d3.select("#footer").html(`Sources: ${COPY.sources} · <a href="${COPY.dataUrl}">See the data</a> · <a href="${COPY.method}">How we graded</a> · ${COPY.credits} · Updated ${COPY.updated}`);
+d3.select("#chart").attr("aria-label", `${COPY.headline}: ` + DATA.map(d => `${d.item} for ${d.outcome}: ${GRADES[d.grade - 1]}`).join("; "));
+
+const controls = d3.select("#controls");
+controls.selectAll("button").data([["all", "All"], ...Object.entries(CATEGORIES).map(([k, v]) => [k, v[0]])]).join("button")
+  .attr("aria-pressed", d => String(d[0] === "all")).text(d => d[1])
+  .on("click", (e, d) => { active = d[0] === "all" ? null : d[0];
+    controls.selectAll("button").attr("aria-pressed", b => String(b[0] === (active ?? "all")));
+    d3.selectAll("circle.b").classed("dim", n => active && n.cat !== active); });
+
+function draw() {
+  const el = document.getElementById("chart");
+  const W = el.clientWidth, narrow = W < 600;
+  const H = narrow ? 720 : 620, M = { t: 10, r: 10, b: 10, l: narrow ? 74 : 96 };
+  const y = d3.scaleBand().domain(d3.range(GRADES.length, 0, -1)).range([M.t, H - M.b]);
+  const r = d3.scaleSqrt().domain([0, d3.max(DATA, d => d.popularity)]).range([0, narrow ? 26 : 40]);
+  const cats = Object.keys(CATEGORIES);
+  const x = d3.scalePoint().domain(cats).range([M.l + 40, W - M.r - 40]).padding(0.5);
+
+  d3.select(el).selectAll("svg").remove();
+  const svg = d3.select(el).append("svg").attr("viewBox", [0, 0, W, H]).attr("width", W).attr("height", H);
+
+  svg.append("g").selectAll("rect").data(y.domain()).join("rect").attr("class", "band")
+    .attr("x", 0).attr("width", W).attr("y", g => y(g) + 1).attr("height", y.bandwidth() - 2).attr("opacity", g => g % 2 ? 1 : .5);
+  svg.append("g").selectAll("text").data(y.domain()).join("text").attr("class", "grade")
+    .attr("x", 6).attr("y", g => y(g) + y.bandwidth() / 2).attr("dy", ".35em").text(g => GRADES[g - 1]);
+  const ly = y(WORTH_IT);
+  svg.append("line").attr("class", "worth").attr("x1", 0).attr("x2", W).attr("y1", ly).attr("y2", ly);
+  svg.append("text").attr("class", "worth-lbl").attr("x", W - 6).attr("y", ly - 6).attr("text-anchor", "end").text("worth it line ▲");
+
+  const nodes = DATA.map(d => ({ ...d, r: r(d.popularity), tx: x(d.cat), ty: y(d.grade) + y.bandwidth() / 2 }));
+  nodes.forEach(n => { n.x = n.tx; n.y = n.ty; });
+  const band = y.bandwidth();
+  const sim = d3.forceSimulation(nodes)
+    .force("x", d3.forceX(d => d.tx).strength(narrow ? 0.03 : 0.06))
+    .force("y", d3.forceY(d => d.ty).strength(0.9))
+    .force("c", d3.forceCollide(d => d.r + 1.5)).stop();
+  for (let i = 0; i < 300; i++) {
+    sim.tick();
+    // keep each bubble inside its grade band so height stays truthful
+    nodes.forEach(n => { const top = y(n.grade) + n.r + 2, bot = y(n.grade) + band - n.r - 2;
+      n.y = top > bot ? n.ty : Math.max(top, Math.min(bot, n.y));
+      n.x = Math.max(M.l + n.r, Math.min(W - M.r - n.r, n.x)); });
+  }
+
+  const g = svg.append("g");
+  g.selectAll("circle").data(nodes).join("circle").attr("class", "b")
+    .classed("dim", d => active && d.cat !== active)
+    .attr("cx", d => d.x).attr("cy", d => d.y).attr("r", d => d.r).attr("fill", d => css(CATEGORIES[d.cat][1]))
+    .on("mousemove", (e, d) => tip.style("opacity", 1).style("left", e.clientX + 12 + "px").style("top", e.clientY + 12 + "px")
+      .html(`<b>${d.item}</b> for ${d.outcome}<br>Evidence: ${GRADES[d.grade - 1]}<br>Popularity: ${d.popularity}`))
+    .on("mouseleave", () => tip.style("opacity", 0));
+  g.selectAll("text").data(nodes.filter(d => d.r > 14)).join("text").attr("class", "bl")
+    .attr("x", d => d.x).attr("y", d => d.y).attr("dy", ".35em").text(d => d.item);
+}
+
+draw();
+addEventListener("resize", draw);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+</script>
+</body>
+</html>

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Area Squares</title>
+<style>
+  :root {
+    --bg: #fafaf7; --ink: #1d1d1b; --muted: #6b6b66; --line: #e3e2dc;
+    --c1: #4e8fb3; --c2: #d98c2b; --c3: #8aa05a; --c4: #b56b8f; --c5: #8a8a83;
+    --inner: rgba(255,255,255,.28); --on-fill: #1d1d1b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161614; --ink: #f1f0ea; --muted: #a3a29b; --line: #34332f;
+      --c1: #5fa3c8; --c2: #e39a3c; --c3: #9cb36a; --c4: #c77fa2; --c5: #77776f;
+      --inner: rgba(0,0,0,.25);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: clamp(28px, 6vw, 48px); line-height: 1.05; margin: 0 0 6px; letter-spacing: -.02em; }
+  .sub { font-size: 18px; color: var(--muted); margin: 0 0 16px; }
+  .key { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 14px; font-size: 13px; color: var(--muted); }
+  .key span::before { content: ""; display: inline-block; width: 11px; height: 11px; border-radius: 2px;
+    margin-right: 6px; vertical-align: -1px; background: var(--sw); }
+  #chart { width: 100%; }
+  .cell rect.outer { stroke: var(--bg); stroke-width: 3; rx: 4; }
+  .cell rect.part { fill: var(--inner); }
+  .amt { font-weight: 700; fill: var(--on-fill); }
+  .lbl { fill: var(--on-fill); }
+  .note { fill: var(--on-fill); opacity: .75; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
+  .tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); padding: 6px 9px;
+    border-radius: 4px; font-size: 13px; max-width: 260px; opacity: 0; transition: opacity .1s; }
+  footer { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1 id="headline"></h1>
+  <p class="sub" id="subhead"></p>
+  <div class="key" id="key"></div>
+  <div id="chart" role="img"></div>
+  <footer id="footer"></footer>
+</main>
+<div class="tip" id="tip"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+// ===== COPY: replace with your editorial frame =====
+const COPY = {
+  headline: "Sample Billions",
+  subhead: "Placeholder data — swap in sourced amounts so each one is read against its neighbours.",
+  unit: "$bn",
+  sources: "SAMPLE DATA, not real figures",
+  dataUrl: "data.csv",
+  credits: "Design: you",
+  updated: "Jan 2026",
+};
+// Categories: key → [legend label, CSS colour var]
+const CATEGORIES = {
+  spend:   ["Spending", "--c1"],
+  earn:    ["Earning", "--c3"],
+  cost:    ["Cost of a problem", "--c2"],
+  give:    ["Giving", "--c4"],
+};
+// ===== DATA: one row per amount; `part` draws a nested square (e.g. profit inside revenue) =====
+const DATA = [
+  { label: "Item A", value: 1600, cat: "cost",  note: "per year" },
+  { label: "Item B", value: 950,  cat: "spend" },
+  { label: "Item C", value: 780,  cat: "earn",  part: { label: "profit", value: 210 } },
+  { label: "Item D", value: 520,  cat: "spend", note: "by 2030" },
+  { label: "Item E", value: 410,  cat: "earn",  part: { label: "profit", value: 95 } },
+  { label: "Item F", value: 390,  cat: "spend" },
+  { label: "Item G", value: 300,  cat: "give",  note: "per year" },
+  { label: "Item H", value: 240,  cat: "cost" },
+  { label: "Item I", value: 160,  cat: "spend" },
+  { label: "Item J", value: 90,   cat: "give" },
+  { label: "Item K", value: 45,   cat: "earn" },
+  { label: "Item L", value: 20,   cat: "cost" },
+];
+// ===== end of things to edit =====
+
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const fmt = v => (v >= 1000 ? `$${d3.format(",.0f")(v)}` : `$${v}`);
+
+d3.select("#headline").text(COPY.headline);
+d3.select("#subhead").text(COPY.subhead);
+d3.select("#key").selectAll("span").data(Object.values(CATEGORIES)).join("span")
+  .style("--sw", d => `var(${d[1]})`).text(d => d[0]);
+d3.select("#footer").html(
+  `Sources: ${COPY.sources} · <a href="${COPY.dataUrl}">See the data</a> · ${COPY.credits} · Updated ${COPY.updated} · Area of each square ∝ amount (${COPY.unit})`);
+d3.select("#chart").attr("aria-label", `${COPY.headline}: ${DATA.map(d => `${d.label} ${fmt(d.value)}`).join(", ")}`);
+
+const tip = d3.select("#tip");
+
+function draw() {
+  const el = document.getElementById("chart");
+  const W = el.clientWidth;
+  const H = Math.round(W < 600 ? W * 1.6 : W * 0.62);
+  const root = d3.hierarchy({ children: DATA }).sum(d => d.value ?? 0).sort((a, b) => b.value - a.value);
+  d3.treemap().tile(d3.treemapSquarify.ratio(1)).size([W, H]).paddingInner(0)(root);
+
+  const svg = d3.select(el).selectChild("svg").empty() ? d3.select(el).append("svg") : d3.select(el).select("svg");
+  svg.attr("viewBox", [0, 0, W, H]).attr("width", W).attr("height", H);
+
+  const cell = svg.selectAll("g.cell").data(root.leaves(), d => d.data.label).join(enter => {
+    const g = enter.append("g").attr("class", "cell");
+    g.append("rect").attr("class", "outer");
+    g.append("rect").attr("class", "part");
+    g.append("text").attr("class", "amt");
+    g.append("text").attr("class", "lbl");
+    g.append("text").attr("class", "note");
+    return g;
+  });
+
+  cell.attr("transform", d => `translate(${d.x0},${d.y0})`)
+    .on("mousemove", (e, d) => {
+      tip.style("opacity", 1).style("left", e.clientX + 12 + "px").style("top", e.clientY + 12 + "px")
+        .html(`<b>${d.data.label}</b><br>${fmt(d.data.value)} ${COPY.unit}${d.data.note ? ` · ${d.data.note}` : ""}` +
+              (d.data.part ? `<br>${d.data.part.label}: ${fmt(d.data.part.value)}` : ""));
+    })
+    .on("mouseleave", () => tip.style("opacity", 0));
+
+  cell.select("rect.outer")
+    .attr("width", d => Math.max(0, d.x1 - d.x0)).attr("height", d => Math.max(0, d.y1 - d.y0))
+    .attr("fill", d => css(CATEGORIES[d.data.cat][1]));
+
+  // Nested part: area ∝ part value, anchored bottom-right
+  cell.select("rect.part").each(function (d) {
+    const p = d.data.part, w = d.x1 - d.x0, h = d.y1 - d.y0;
+    if (!p) return d3.select(this).attr("width", 0);
+    const side = Math.sqrt((p.value / d.data.value) * w * h);
+    const s = Math.min(side, w - 6, h - 6);
+    d3.select(this).attr("x", w - s - 3).attr("y", h - s - 3).attr("width", s).attr("height", s).attr("rx", 3);
+  });
+
+  cell.each(function (d) {
+    const w = d.x1 - d.x0, h = d.y1 - d.y0, g = d3.select(this);
+    const big = Math.max(11, Math.min(28, Math.sqrt(w * h) / 7));
+    const show = w > 46 && h > 34;
+    g.select(".amt").attr("x", 6).attr("y", big + 2).attr("font-size", big).text(show ? fmt(d.data.value) : "");
+    g.select(".lbl").attr("x", 6).attr("y", big * 2 + 2).attr("font-size", Math.max(10, big * 0.62))
+      .text(show && h > big * 2.2 ? d.data.label : "");
+    g.select(".note").attr("x", 6).attr("y", big * 2.6 + 6).text(show && h > big * 3.2 && d.data.note ? d.data.note : "");
+  });
+}
+
+draw();
+addEventListener("resize", draw);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+</script>
+</body>
+</html>
