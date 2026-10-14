@@ -10,6 +10,10 @@ Skills follow the [Agent Skills](https://agentskills.io/) format.
 - [`apply-design-system-update`](./skills/apply-design-system-update) — propagate a
   Rising design-system token change (color, size, spacing, font) to the consumer
   apps that copy tokens inline.
+- [`editorial-infographics`](./skills/editorial-infographics) — find the hook in a
+  dataset, pick the right form (area squares, balloon race, quadrant bubbles…),
+  and ship a sourced, annotated infographic in the Information is Beautiful
+  tradition. Includes D3 templates.
 
 ## Skill Structure
 
