@@ -53,7 +53,7 @@
 </main>
 <div class="tip" id="tip"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js" integrity="sha512-vc58qvvBdrDR4etbxMdlTt4GBQk1qjvyORR2nrsPsFPyrs+/u5c3+1Ct6upOgdZoIl7eq6k3a1UPDSNAQi/32A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
 // ===== COPY =====
 const COPY = {
@@ -143,7 +143,7 @@ function draw() {
   svg.append("text").attr("class", "atitle").attr("x", W - M.r).attr("y", H - 8).attr("text-anchor", "end").text(`${xm.label} →`);
   svg.append("text").attr("class", "atitle").attr("transform", `translate(14,${M.t}) rotate(-90)`).attr("text-anchor", "end").text(`${Y.label} →`);
 
-  const data = [...DATA].sort((a, b) => b.size - a.size); // big first so small bubbles stay on top
+  const data = DATA.toSorted((a, b) => b.size - a.size); // big first so small bubbles stay on top
   svg.append("g").selectAll("circle").data(data).join("circle").attr("class", "b")
     .attr("cx", d => x(d[xm.field])).attr("cy", d => y(d[Y.field])).attr("r", d => r(d.size))
     .attr("fill", d => css(CATEGORIES[d.cat][1]))
